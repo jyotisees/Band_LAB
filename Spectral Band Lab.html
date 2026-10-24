@@ -1,0 +1,852 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Spectral Band Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: instrument console. A large simulated satellite scene beside a live spectrum plot, with a rack of band cards below. */
+:root{
+  --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  --font-data:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --bg:#e9edf1; --panel:#fafbfc; --panel-2:#e3e9ef; --fg:#111b25; --muted:#4a5967; --line:#c6d0da;
+  --accent:#0a6a86; --accent-fg:#ffffff; --frame:#05080b;
+  --ch-r:#d0302b; --ch-g:#17884a; --ch-b:#2a63d6; --ch-none:#76828f; --on-ch:#ffffff;
+  --grid:#d5dce4; --blocked:#8e9aa7;
+  --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a1016; --panel:#111921; --panel-2:#192430; --fg:#e8eff6; --muted:#9aabba; --line:#243240;
+    --accent:#4cc2e0; --accent-fg:#03202a; --frame:#030507;
+    --ch-r:#ff6a63; --ch-g:#3ed483; --ch-b:#6aa0ff; --ch-none:#8896a4; --on-ch:#06121a;
+    --grid:#1f2d3b; --blocked:#4c5a68; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a1016; --panel:#111921; --panel-2:#192430; --fg:#e8eff6; --muted:#9aabba; --line:#243240;
+  --accent:#4cc2e0; --accent-fg:#03202a; --frame:#030507;
+  --ch-r:#ff6a63; --ch-g:#3ed483; --ch-b:#6aa0ff; --ch-none:#8896a4; --on-ch:#06121a;
+  --grid:#1f2d3b; --blocked:#4c5a68; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font:15px/1.5 var(--font-body);
+  padding-block:22px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.05;font-weight:700}
+h2{font-size:20px;font-weight:600}
+p{margin:0}
+.sub{max-width:68ch;color:var(--muted);margin-top:10px;font-size:16px}
+.mono{font-family:var(--font-data)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;min-width:0}
+.panel-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.note{color:var(--muted);font-size:14px}
+button{font-family:inherit}
+button:focus-visible,select:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font:500 14px var(--font-body);padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+.console{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.console{grid-template-columns:minmax(0,1fr)}}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:500 14px var(--font-body);padding:7px 14px;border:0;background:var(--panel-2);color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+
+.frame{position:relative;background:var(--frame);border-radius:8px;overflow:hidden;aspect-ratio:320/220;max-width:100%;cursor:crosshair;touch-action:pan-y}
+.frame canvas{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+.ring{position:absolute;width:24px;height:24px;border:2px solid #fff;box-shadow:0 0 0 1px #000,inset 0 0 0 1px #000;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);display:none}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#e8eff6;background:rgba(3,5,7,.78);font-size:16px}
+.scale{position:absolute;left:8px;bottom:8px;font:500 12px var(--font-data);color:#fff;background:rgba(3,5,7,.62);padding:3px 8px;border-radius:5px;pointer-events:none}
+
+.caption{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pill{display:inline-flex;align-items:center;gap:8px;font:500 14px var(--font-data);padding:5px 10px;border-radius:7px;background:var(--panel-2);border:1px solid var(--line)}
+.pill i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+.ndbox{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.nd-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.nd-row label{display:flex;align-items:center;gap:8px;font-weight:500}
+select{font:500 14px var(--font-data);padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.op{color:var(--muted)}
+.formula{font-size:15px}
+.legend-bar{max-width:520px}
+.bar{height:14px;border-radius:5px;border:1px solid var(--line)}
+.ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+
+.scope-svg{width:100%;height:auto;display:block}
+.scope-svg text{font-family:var(--font-data);font-size:13px;fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}
+.lg{display:inline-flex;align-items:center;gap:8px;font:500 14px var(--font-body);padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.lg i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.lg[aria-pressed="true"]{border-color:var(--fg);background:var(--panel-2)}
+.inspect{border-top:1px solid var(--line);padding-top:12px;min-height:120px}
+.inspect-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.inspect-h i{width:14px;height:14px;border-radius:50%}
+.inspect ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.inspect li{display:grid;grid-template-columns:34px 72px minmax(0,1fr) 44px;align-items:center;gap:8px;font:500 13px var(--font-data)}
+.inspect .trk{height:8px;border-radius:4px;background:var(--panel-2);overflow:hidden}
+.inspect .trk b{display:block;height:100%;border-radius:4px}
+.inspect .val{text-align:right;font-variant-numeric:tabular-nums}
+
+.rack-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px}
+.conditions{display:grid;grid-template-columns:repeat(2,minmax(150px,210px)) auto;gap:8px 18px;align-items:end}
+.conditions label{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.conditions .toggle{display:flex;align-items:center;gap:8px;color:var(--fg);font-size:14px;padding-bottom:2px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.preset{text-align:left;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;font:600 14px var(--font-body)}
+.preset small{display:block;font:400 12px var(--font-body);color:var(--muted)}
+.preset:hover{border-color:var(--accent)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:14px}
+.empty{color:var(--muted);padding:18px 4px}
+.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:12px;min-width:0}
+.card-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.tag{font:600 13px var(--font-data);padding:3px 9px;border-radius:6px;background:var(--tagc,var(--ch-none));color:var(--tagfg,var(--on-ch))}
+.card-t{display:flex;flex-direction:column;min-width:0;flex:1}
+.card-t strong{font-weight:600;line-height:1.2}
+.card-t span{font-size:12px;color:var(--muted)}
+.x{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:18px;line-height:1;cursor:pointer}
+.x:hover{color:var(--fg);border-color:var(--fg)}
+.card-b{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px}
+@media (max-width:420px){.card-b{grid-template-columns:minmax(0,1fr)}}
+.thumb{width:100%;height:auto;display:block;border-radius:6px;background:var(--frame);image-rendering:pixelated;align-self:start}
+.ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ctl label{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-top:4px}
+.ctl output{color:var(--fg);font-size:13px}
+.chips{display:flex;gap:6px;margin-top:8px}
+.chip{flex:1;font:600 13px var(--font-data);padding:5px 0;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);cursor:pointer}
+.chip.r[aria-pressed="true"]{background:var(--ch-r);border-color:var(--ch-r);color:var(--on-ch)}
+.chip.g[aria-pressed="true"]{background:var(--ch-g);border-color:var(--ch-g);color:var(--on-ch)}
+.chip.b[aria-pressed="true"]{background:var(--ch-b);border-color:var(--ch-b);color:var(--on-ch)}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:var(--track,var(--panel-2));border:1px solid var(--line)}
+input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:var(--track,var(--panel-2));border:1px solid var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--panel);border:3px solid var(--accent);margin-top:-5px;cursor:grab}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--panel);border:3px solid var(--accent);cursor:grab}
+
+.add-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.add-row .lbl{font-size:13px;color:var(--muted);margin-right:4px}
+.quick{font:500 13px var(--font-data);padding:6px 10px;border-radius:7px;border:1px dashed var(--muted);background:transparent;color:var(--fg);cursor:pointer}
+.quick:hover:not(:disabled){border-style:solid;border-color:var(--accent)}
+.quick:disabled{opacity:.45;cursor:not-allowed}
+.spacer{flex:1}
+
+.try{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:10px 22px;margin:12px 0 0;padding:0;list-style:none}
+.try li{color:var(--fg);font-size:15px}
+.try b{display:block;font:600 13px var(--font-data);color:var(--accent);margin-bottom:2px}
+footer{color:var(--muted);font-size:13px}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Spectral Band Lab</h1>
+    <p class="sub">A satellite records the world in slices of wavelength, many of them invisible to your eyes. Add bands, move them along the spectrum, send them to the red, green and blue channels, and watch the picture change.</p>
+  </header>
+
+  <div class="console">
+    <section class="panel" aria-labelledby="vh">
+      <div class="panel-h">
+        <h2 id="vh">Output image</h2>
+        <div class="seg" role="group" aria-label="Image mode">
+          <button id="mRgb" type="button" aria-pressed="true">Color composite</button>
+          <button id="mNd" type="button" aria-pressed="false">Band index</button>
+        </div>
+      </div>
+      <div class="frame" id="frame">
+        <canvas id="out" width="320" height="220" role="img" aria-label="Simulated satellite image built from the selected bands"></canvas>
+        <div class="ring" id="ring"></div>
+        <div class="msg" id="msg" hidden></div>
+        <div class="scale">Simulated scene · 9.6 × 6.6 km · 30 m pixels</div>
+      </div>
+      <div class="caption" id="caption"></div>
+      <div class="ndbox" id="ndbox" hidden>
+        <div class="nd-row">
+          <label for="selA">Band A <select id="selA"></select></label>
+          <span class="op">minus</span>
+          <label for="selB">Band B <select id="selB"></select></label>
+        </div>
+        <p class="formula mono" id="formula"></p>
+        <div class="legend-bar">
+          <div class="bar" id="ndbar"></div>
+          <div class="ticks mono"><span id="ndLo"></span><span>0</span><span id="ndHi"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="sh">
+      <div class="panel-h">
+        <h2 id="sh">Spectral signatures</h2>
+      </div>
+      <p class="note">How much light each surface reflects at every wavelength. Shaded strips mark your bands. Hover the image or pick a surface below to follow one curve.</p>
+      <div id="scope" aria-label="Chart of reflectance against wavelength for seven surface types with your bands shaded"></div>
+      <div class="legend" id="legend" role="group" aria-label="Surface types"></div>
+      <div class="inspect" id="inspect" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="rh">
+    <div class="rack-h">
+      <div>
+        <h2 id="rh">Band rack</h2>
+        <p class="note" id="count"></p>
+      </div>
+      <div class="conditions">
+        <div>
+          <label for="haze">Atmospheric haze <output id="hazeOut" class="mono"></output></label>
+          <input id="haze" type="range" min="0" max="100" step="1" value="15">
+        </div>
+        <div>
+          <label for="noise">Sensor noise <output id="noiseOut" class="mono"></output></label>
+          <input id="noise" type="range" min="0" max="100" step="1" value="30">
+        </div>
+        <label class="toggle" for="stretch"><input id="stretch" type="checkbox" checked> Auto-stretch contrast</label>
+      </div>
+    </div>
+    <div class="presets" id="presets" role="group" aria-label="Band presets"></div>
+    <div class="cards" id="cards"></div>
+    <div class="add-row">
+      <span class="lbl">Add a typical satellite band</span>
+      <span id="quick" style="display:contents"></span>
+      <span class="spacer"></span>
+      <button class="btn primary" id="addCustom" type="button">Add custom band</button>
+      <button class="btn" id="clearAll" type="button">Remove all</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="th">
+    <h2 id="th">Try this in class</h2>
+    <ul class="try">
+      <li><b>Plants glow</b>Pick Color infrared, then hover a field. Healthy crops reflect strongly in near-infrared, so they turn bright red.</li>
+      <li><b>Slide a band</b>Drag one band's center from 400 to 2500 nm and watch its thumbnail. Water, plants and soil trade places between bright and dark.</li>
+      <li><b>Narrow it</b>Set a width of 10 nm. The image turns grainy because less light reaches the sensor.</li>
+      <li><b>Add haze</b>Raise haze. Blue washes out first while the SWIR bands barely change, which is why SWIR sees through smoke.</li>
+      <li><b>Find the burn</b>Compare the Vegetation index with the Burn index. The scar stands out in only one of them.</li>
+    </ul>
+  </section>
+
+  <footer>Spectra are simplified teaching curves, not measured library data. The scene is generated in your browser.</footer>
+</div>
+<script>
+'use strict';
+/* ===== core: spectra, procedural scene, band math (no DOM) ===== */
+const WL_MIN = 400, WL_MAX = 2500, LOGR = Math.log(WL_MAX / WL_MIN);
+const SW = 320, SH = 220, N = SW * SH;
+
+const CLASSES = [
+  { id: 'water', name: 'Deep water', color: '#3b82d6', amp: .03,
+    pts: [[400,.06],[480,.075],[550,.055],[600,.03],[650,.018],[700,.01],[800,.005],[1000,.003],[1300,.002],[2500,.001]] },
+  { id: 'forest', name: 'Dense forest', color: '#1f9d55', amp: .34,
+    pts: [[400,.03],[450,.03],[500,.04],[550,.08],[600,.05],[650,.03],[680,.025],[720,.2],[750,.4],[800,.48],[900,.5],[1000,.48],[1100,.46],[1250,.4],[1350,.3],[1450,.18],[1650,.28],[1800,.24],[1950,.12],[2100,.16],[2200,.14],[2400,.08],[2500,.06]] },
+  { id: 'crops', name: 'Healthy crops', color: '#6fae16', amp: .12,
+    pts: [[400,.04],[450,.045],[500,.06],[550,.12],[600,.07],[650,.05],[680,.04],[720,.3],[750,.5],[850,.56],[1000,.54],[1250,.48],[1350,.4],[1450,.3],[1650,.36],[1800,.32],[1950,.18],[2200,.2],[2400,.12],[2500,.1]] },
+  { id: 'grass', name: 'Dry grassland', color: '#d4a72c', amp: .18,
+    pts: [[400,.05],[500,.07],[550,.11],[600,.1],[650,.09],[700,.14],[750,.3],[850,.38],[1000,.37],[1250,.34],[1350,.3],[1450,.24],[1650,.32],[1800,.3],[1950,.2],[2200,.2],[2500,.14]] },
+  { id: 'soil', name: 'Bare soil', color: '#c4693a', amp: .14,
+    pts: [[400,.07],[500,.11],[600,.18],[700,.24],[800,.28],[1000,.32],[1300,.36],[1450,.34],[1650,.4],[1800,.4],[1950,.36],[2200,.34],[2500,.3]] },
+  { id: 'urban', name: 'Built-up area', color: '#a07ad6', amp: 0,
+    pts: [[400,.12],[500,.15],[600,.17],[700,.18],[800,.19],[1000,.2],[1300,.22],[1650,.24],[2000,.24],[2200,.22],[2500,.2]] },
+  { id: 'burn', name: 'Burn scar', color: '#e0457f', amp: .22,
+    pts: [[400,.03],[500,.04],[600,.05],[700,.06],[800,.08],[1000,.1],[1300,.12],[1650,.15],[2200,.19],[2500,.17]] }
+];
+
+function interp(p, x) {
+  if (x <= p[0][0]) return p[0][1];
+  for (let i = 1; i < p.length; i++) {
+    if (x <= p[i][0]) { const a = p[i - 1], b = p[i]; return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); }
+  }
+  return p[p.length - 1][1];
+}
+function bandMean(p, c, w) {
+  const lo = Math.max(WL_MIN, c - w / 2), hi = Math.min(WL_MAX, c + w / 2), n = 9;
+  let s = 0;
+  for (let k = 0; k < n; k++) s += interp(p, lo + (hi - lo) * (k + .5) / n);
+  return s / n;
+}
+
+/* ---- seeded noise ---- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash2(ix, iy, seed) {
+  let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy, seed), b = hash2(ix + 1, iy, seed), c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y, seed, oct) {
+  let s = 0, a = .5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { s += a * vnoise(x * f, y * f, seed + i * 17); n += a; a *= .5; f *= 2; }
+  return s / n;
+}
+function gaussArray(seed) {
+  const r = mulberry32(seed), a = new Float32Array(N);
+  for (let i = 0; i < N; i += 2) {
+    const u = Math.max(1e-9, r()), v = r(), m = Math.sqrt(-2 * Math.log(u));
+    a[i] = m * Math.cos(2 * Math.PI * v);
+    if (i + 1 < N) a[i + 1] = m * Math.sin(2 * Math.PI * v);
+  }
+  return a;
+}
+function quantile(arr, q) {
+  const s = Float32Array.from(arr).sort();
+  return s[Math.min(s.length - 1, Math.floor(q * s.length))];
+}
+
+/* ---- scene: class map + illumination + texture ---- */
+function buildScene() {
+  const cls = new Uint8Array(N), shade = new Float32Array(N), tex = new Float32Array(N);
+  const E = new Float32Array(N), M = new Float32Array(N);
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    const i = y * SW + x;
+    E[i] = fbm(x / 64, y / 64, 11, 5);
+    M[i] = fbm(x / 48 + 9, y / 48 + 4, 23, 4);
+  }
+  const qF = quantile(E, .66), qG = quantile(E, .38), qM1 = quantile(M, .35), qM2 = quantile(M, .55);
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    const i = y * SW + x;
+    let c, fieldTex = 1, inField = false;
+    if (E[i] > qF) c = 1;
+    else if (E[i] > qG) c = M[i] > qM1 ? 3 : 4;
+    else c = M[i] > qM2 ? 3 : 4;
+
+    /* fields: warped grid in the lower part of the scene */
+    inField = y > SH * .5 + (vnoise(x / 35, 1, 5) - .5) * 46 && x > SW * .18 + (vnoise(2, y / 35, 6) - .5) * 40;
+    if (inField) {
+      const fx = x + (vnoise(y / 40, 3, 7) - .5) * 16, fy = y + (vnoise(x / 40, 5, 8) - .5) * 12;
+      const gx = Math.floor(fx / 30), gy = Math.floor(fy / 22), h = hash2(gx, gy, 99);
+      c = h < .58 ? 2 : h < .78 ? 4 : 3;
+      fieldTex = .8 + .4 * hash2(gx, gy, 101);
+    }
+    /* burn scar */
+    const bd = Math.hypot(x - SW * .5, (y - SH * .2) * 1.2) / 30 + (fbm(x / 14, y / 14, 61, 3) - .5) * .8;
+    if (bd < 1) c = 6;
+    /* city and small town */
+    const ud = Math.hypot((x - SW * .22) * 1.1, y - SH * .36) / 40 + (fbm(x / 15, y / 15, 41, 3) - .5) * .6;
+    const td = Math.hypot(x - SW * .66, y - SH * .6) / 13 + (fbm(x / 9, y / 9, 43, 2) - .5) * .5;
+    if (ud < 1 || td < 1) c = 5;
+    /* river and lake */
+    const yc = SH * .46 + Math.sin(x / 38) * 22 + (fbm(x / 50, 3, 9, 3) - .5) * 40;
+    const rw = 3.2 + 2 * Math.sin(x / 60 + 1);
+    const ld = Math.pow((x - SW * .8) / 36, 2) + Math.pow((y - SH * .2) / 22, 2) + (fbm(x / 20, y / 20, 31, 3) - .5) * .7;
+    if (Math.abs(y - yc) < rw / 2 || ld < 1) c = 0;
+
+    cls[i] = c;
+    const tf = (fbm(x / 2.2, y / 2.2, 71, 2) - .5) * 2;
+    let t = 1 + tf * CLASSES[c].amp;
+    if (c === 5) {
+      const road = (x % 8 === 0) || (y % 8 === 0);
+      t = road ? .7 : .85 + .35 * hash2(x >> 3, y >> 3, 55) + tf * .06;
+    }
+    if (inField && (c === 2 || c === 3 || c === 4)) t *= fieldTex;
+    tex[i] = t;
+
+    const dx = E[y * SW + Math.min(SW - 1, x + 1)] - E[y * SW + Math.max(0, x - 1)];
+    const dy = E[Math.min(SH - 1, y + 1) * SW + x] - E[Math.max(0, y - 1) * SW + x];
+    let s = 1 + 4 * (dx + dy);
+    if (c === 0) s = 1;
+    shade[i] = s < .75 ? .75 : s > 1.2 ? 1.2 : s;
+  }
+  return { cls, shade, tex };
+}
+
+/* ---- image statistics ---- */
+function p99(arr) {
+  let mx = 0;
+  for (let i = 0; i < arr.length; i++) if (arr[i] > mx) mx = arr[i];
+  if (mx <= 0) return 1e-6;
+  const B = 512, h = new Uint32Array(B);
+  for (let i = 0; i < arr.length; i++) h[Math.min(B - 1, (arr[i] / mx * B) | 0)]++;
+  const target = arr.length * .99;
+  let acc = 0;
+  for (let k = 0; k < B; k++) { acc += h[k]; if (acc >= target) return mx * (k + 1) / B; }
+  return mx;
+}
+function ndRange(nd) {
+  const B = 512, h = new Uint32Array(B);
+  for (let i = 0; i < nd.length; i++) {
+    const t = (nd[i] + 1) / 2;
+    h[Math.max(0, Math.min(B - 1, (t * B) | 0))]++;
+  }
+  const val = k => (k + .5) / B * 2 - 1;
+  let acc = 0, lo = -1, hi = 1, gotLo = false;
+  for (let k = 0; k < B; k++) {
+    acc += h[k];
+    if (!gotLo && acc >= nd.length * .02) { lo = val(k); gotLo = true; }
+    if (acc >= nd.length * .98) { hi = val(k); break; }
+  }
+  return Math.max(Math.abs(lo), Math.abs(hi), .05);
+}
+
+/* ---- colour helpers ---- */
+function wlRGB(w) {
+  let r = 0, g = 0, b = 0;
+  if (w < 440) { r = -(w - 440) / 60; b = 1; }
+  else if (w < 490) { g = (w - 440) / 50; b = 1; }
+  else if (w < 510) { g = 1; b = -(w - 510) / 20; }
+  else if (w < 580) { r = (w - 510) / 70; g = 1; }
+  else if (w < 645) { r = 1; g = -(w - 645) / 65; }
+  else { r = 1; }
+  const f = w < 420 ? .35 + .65 * (w - 400) / 20 : w > 680 ? .35 + .65 * (700 - w) / 20 : 1;
+  const k = Math.max(0, f);
+  return [Math.round(255 * Math.pow(r * k, .8)), Math.round(255 * Math.pow(g * k, .8)), Math.round(255 * Math.pow(b * k, .8))];
+}
+const rgbStr = c => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+const mixC = (a, b, f) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * f));
+
+/* ===== interface ===== */
+const $ = s => document.querySelector(s);
+const SC = buildScene();
+const frame = $('#frame'), out = $('#out'), octx = out.getContext('2d'), oimg = octx.createImageData(SW, SH);
+const MAXB = 8, CH = ['r', 'g', 'b'];
+const state = { bands: [], mode: 'rgb', a: 0, b: 1, haze: .15, noise: .3, stretch: true, hover: -1, sticky: -1 };
+
+const LUT = new Uint8Array(1024);
+for (let j = 0; j < 1024; j++) LUT[j] = Math.round(Math.pow(j / 1023, .8) * 255);
+const posOf = c => 1000 * Math.log(c / WL_MIN) / LOGR;
+const cOf = p => WL_MIN * Math.exp(LOGR * p / 1000);
+
+const ND_STOPS = [[0, [122, 74, 29]], [.25, [205, 170, 110]], [.5, [240, 238, 226]], [.75, [134, 200, 98]], [1, [12, 98, 44]]];
+function ndColor(t) {
+  for (let i = 1; i < ND_STOPS.length; i++) {
+    if (t <= ND_STOPS[i][0]) {
+      const a = ND_STOPS[i - 1], b = ND_STOPS[i];
+      return mixC(a[1], b[1], (t - a[0]) / (b[0] - a[0]));
+    }
+  }
+  return ND_STOPS[ND_STOPS.length - 1][1];
+}
+const NDLUT = new Uint8Array(256 * 3);
+for (let k = 0; k < 256; k++) { const c = ndColor(k / 255); NDLUT[k * 3] = c[0]; NDLUT[k * 3 + 1] = c[1]; NDLUT[k * 3 + 2] = c[2]; }
+$('#ndbar').style.background = 'linear-gradient(90deg,' + ND_STOPS.map(s => rgbStr(s[1]) + ' ' + (s[0] * 100) + '%').join(',') + ')';
+
+function regionName(c) {
+  if (c < 495) return 'Blue';
+  if (c < 580) return 'Green';
+  if (c < 610) return 'Yellow-orange';
+  if (c < 700) return 'Red';
+  if (c < 750) return 'Red edge';
+  if (c < 1300) return 'Near-infrared';
+  if (c < 1900) return 'SWIR 1';
+  return 'SWIR 2';
+}
+function specGrad() {
+  const st = [];
+  for (let k = 0; k <= 48; k++) {
+    const p = k / 48, w = cOf(p * 1000);
+    const col = w <= 700 ? wlRGB(w) : mixC([122, 31, 31], [118, 132, 148], Math.log(w / 700) / Math.log(2500 / 700));
+    st.push(rgbStr(col) + ' ' + (p * 100).toFixed(1) + '%');
+  }
+  return 'linear-gradient(90deg,' + st.join(',') + ')';
+}
+const SPEC_GRAD = specGrad();
+
+/* ---- bands ---- */
+const chKeys = b => CH.filter(k => b.ch[k]);
+const bandCol = b => { const k = chKeys(b); return k.length === 1 ? 'var(--ch-' + k[0] + ')' : k.length === 0 ? 'var(--ch-none)' : 'var(--fg)'; };
+const bandFg = b => chKeys(b).length > 1 ? 'var(--bg)' : 'var(--on-ch)';
+let seq = 0;
+function makeBand(center, width, ch) {
+  seq++;
+  return { center, width, ch: { r: ch.includes('r'), g: ch.includes('g'), b: ch.includes('b') }, noise: gaussArray(1000 + seq * 77), data: new Float32Array(N), tag: '' };
+}
+function renumber() { state.bands.forEach((b, i) => { b.tag = 'B' + (i + 1); }); }
+function freeCh() {
+  for (const k of CH) if (!state.bands.some(b => b.ch[k])) return k;
+  return '';
+}
+
+function buildCard(b) {
+  const el = document.createElement('article');
+  el.className = 'card';
+  const id = 'b' + Math.random().toString(36).slice(2, 8);
+  el.innerHTML =
+    '<header class="card-h"><span class="tag"></span><div class="card-t"><strong></strong><span class="mono"></span></div>' +
+    '<button class="x" type="button">&times;</button></header>' +
+    '<div class="card-b">' +
+    '<canvas class="thumb" width="160" height="110"></canvas>' +
+    '<div class="ctl">' +
+    '<label for="c-' + id + '">Center <output class="mono" id="co-' + id + '"></output></label>' +
+    '<input type="range" min="0" max="1000" step="1" id="c-' + id + '">' +
+    '<label for="w-' + id + '">Width <output class="mono" id="wo-' + id + '"></output></label>' +
+    '<input type="range" min="10" max="400" step="5" id="w-' + id + '">' +
+    '<div class="chips" role="group">' +
+    '<button type="button" class="chip r" data-ch="r">R</button>' +
+    '<button type="button" class="chip g" data-ch="g">G</button>' +
+    '<button type="button" class="chip b" data-ch="b">B</button>' +
+    '</div></div></div>';
+  const q = s => el.querySelector(s);
+  const canvas = q('.thumb');
+  const u = {
+    tag: q('.tag'), name: q('.card-t strong'), range: q('.card-t span'), x: q('.x'),
+    canvas, ctx: canvas.getContext('2d'),
+    cIn: q('#c-' + id), wIn: q('#w-' + id), cOut: q('#co-' + id), wOut: q('#wo-' + id),
+    chips: Array.from(el.querySelectorAll('.chip'))
+  };
+  u.timg = u.ctx.createImageData(160, 110);
+  b.ui = u;
+  u.cIn.style.setProperty('--track', SPEC_GRAD);
+  u.cIn.value = Math.round(posOf(b.center));
+  u.wIn.value = b.width;
+  u.cIn.addEventListener('input', () => { b.center = Math.round(cOf(+u.cIn.value)); schedule(); });
+  u.wIn.addEventListener('input', () => { b.width = +u.wIn.value; schedule(); });
+  u.chips.forEach(ch => ch.addEventListener('click', () => { b.ch[ch.dataset.ch] = !b.ch[ch.dataset.ch]; schedule(); }));
+  u.x.addEventListener('click', () => { state.bands = state.bands.filter(x => x !== b); structure(); schedule(); });
+  return el;
+}
+
+function syncCard(b) {
+  const u = b.ui;
+  u.tag.textContent = b.tag;
+  u.tag.style.setProperty('--tagc', bandCol(b));
+  u.tag.style.setProperty('--tagfg', bandFg(b));
+  u.name.textContent = regionName(b.center);
+  const lo = Math.max(WL_MIN, Math.round(b.center - b.width / 2)), hi = Math.min(WL_MAX, Math.round(b.center + b.width / 2));
+  u.range.textContent = lo + '–' + hi + ' nm';
+  u.cOut.textContent = Math.round(b.center) + ' nm';
+  u.wOut.textContent = b.width + ' nm';
+  u.chips.forEach(ch => ch.setAttribute('aria-pressed', String(b.ch[ch.dataset.ch])));
+  u.x.setAttribute('aria-label', 'Remove ' + b.tag);
+  u.canvas.setAttribute('aria-label', b.tag + ' band image');
+}
+
+function structure() {
+  renumber();
+  const box = $('#cards');
+  box.textContent = '';
+  if (!state.bands.length) {
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = 'No bands yet. Pick a preset or add a band below.';
+    box.appendChild(p);
+  }
+  state.bands.forEach(b => box.appendChild(buildCard(b)));
+  const full = state.bands.length >= MAXB;
+  $('#count').textContent = state.bands.length + ' of ' + MAXB + ' bands in use';
+  $('#addCustom').disabled = full;
+  document.querySelectorAll('.quick').forEach(q => { q.disabled = full; });
+  const len = state.bands.length;
+  if (state.a >= len) state.a = 0;
+  if (state.b >= len || state.b === state.a) state.b = len > 1 ? (state.a === 0 ? 1 : 0) : 0;
+  ['#selA', '#selB'].forEach(sel => {
+    const s = $(sel);
+    s.textContent = '';
+    state.bands.forEach((b, i) => { const o = document.createElement('option'); o.value = i; s.appendChild(o); });
+  });
+}
+
+/* ---- rendering ---- */
+function computeBands() {
+  const haze = state.haze;
+  for (const b of state.bands) {
+    const refl = CLASSES.map(c => bandMean(c.pts, b.center, b.width));
+    const lam = b.center;
+    const trans = Math.exp(-haze * .9 * Math.pow(500 / lam, 2));
+    const path = haze * .25 * Math.pow(500 / lam, 4);
+    const sigma = state.noise * .06 * Math.sqrt(40 / b.width);
+    const d = b.data, n = b.noise, cls = SC.cls, sh = SC.shade, tx = SC.tex;
+    for (let i = 0; i < N; i++) {
+      const v = refl[cls[i]] * sh[i] * tx[i] * trans + path + n[i] * sigma;
+      d[i] = v < 0 ? 0 : v;
+    }
+  }
+}
+
+function showMsg(text) {
+  const m = $('#msg');
+  m.hidden = !text;
+  m.textContent = text || '';
+}
+function blank(px) { for (let i = 0; i < N; i++) { px[4 * i] = 0; px[4 * i + 1] = 0; px[4 * i + 2] = 0; px[4 * i + 3] = 255; } }
+
+const ndBuf = new Float32Array(N);
+function drawMain() {
+  const px = oimg.data;
+  if (state.mode === 'rgb') {
+    const lists = CH.map(k => state.bands.filter(b => b.ch[k]));
+    if (!lists.some(l => l.length)) { showMsg('No channel is switched on. Turn on R, G or B for at least one band.'); blank(px); octx.putImageData(oimg, 0, 0); return; }
+    showMsg('');
+    const arrs = lists.map(list => {
+      if (!list.length) return null;
+      const a = new Float32Array(N);
+      for (const b of list) { const d = b.data; for (let i = 0; i < N; i++) a[i] += d[i]; }
+      const inv = 1 / list.length;
+      for (let i = 0; i < N; i++) a[i] *= inv;
+      return a;
+    });
+    const gains = arrs.map(a => a ? 1023 / (state.stretch ? p99(a) : .6) : 0);
+    for (let i = 0; i < N; i++) {
+      for (let k = 0; k < 3; k++) {
+        const a = arrs[k];
+        let j = a ? (a[i] * gains[k]) | 0 : 0;
+        px[4 * i + k] = LUT[j > 1023 ? 1023 : j];
+      }
+      px[4 * i + 3] = 255;
+    }
+  } else {
+    const A = state.bands[state.a], B = state.bands[state.b];
+    if (state.bands.length < 2 || !A || !B || A === B) { showMsg('An index needs two different bands. Add another band.'); blank(px); octx.putImageData(oimg, 0, 0); return; }
+    showMsg('');
+    const ad = A.data, bd = B.data;
+    for (let i = 0; i < N; i++) { const s = ad[i] + bd[i]; ndBuf[i] = s > 1e-5 ? (ad[i] - bd[i]) / s : 0; }
+    const m = ndRange(ndBuf);
+    for (let i = 0; i < N; i++) {
+      let t = (ndBuf[i] / m + 1) / 2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const k = ((t * 255) | 0) * 3;
+      px[4 * i] = NDLUT[k]; px[4 * i + 1] = NDLUT[k + 1]; px[4 * i + 2] = NDLUT[k + 2]; px[4 * i + 3] = 255;
+    }
+    $('#ndLo').textContent = '−' + m.toFixed(2);
+    $('#ndHi').textContent = '+' + m.toFixed(2);
+  }
+  octx.putImageData(oimg, 0, 0);
+}
+
+function drawThumbs() {
+  for (const b of state.bands) {
+    const u = b.ui, px = u.timg.data, d = b.data;
+    const gain = 1023 / (state.stretch ? p99(d) : .6);
+    for (let y = 0; y < 110; y++) for (let x = 0; x < 160; x++) {
+      const j0 = (d[(y * 2) * SW + x * 2] * gain) | 0;
+      const v = LUT[j0 > 1023 ? 1023 : j0], o = 4 * (y * 160 + x);
+      px[o] = v; px[o + 1] = v; px[o + 2] = v; px[o + 3] = 255;
+    }
+    u.ctx.putImageData(u.timg, 0, 0);
+    syncCard(b);
+  }
+}
+
+function ndName(A, B) {
+  const a = A.center, b = B.center;
+  if (a >= 740 && a <= 950 && b >= 600 && b <= 700) return 'Close to NDVI: vegetation greenness';
+  if (a >= 500 && a <= 600 && b >= 750 && b <= 1000) return 'Close to NDWI: open water';
+  if (a >= 750 && a <= 1000 && b >= 1900 && b <= 2400) return 'Close to NBR: burn severity';
+  if (a >= 750 && a <= 1000 && b >= 1500 && b <= 1750) return 'Close to NDMI: canopy moisture';
+  return 'Custom band ratio';
+}
+function drawCaption() {
+  const cap = $('#caption');
+  if (state.mode === 'rgb') {
+    cap.hidden = false;
+    cap.innerHTML = CH.map(k => {
+      const list = state.bands.filter(b => b.ch[k]);
+      const txt = list.length ? list.map(b => b.tag + ' ' + Math.round(b.center) + ' nm').join(' + ') : 'off (black)';
+      return '<span class="pill"><i style="background:var(--ch-' + k + ')"></i>' + k.toUpperCase() + ' = ' + txt + '</span>';
+    }).join('');
+    $('#ndbox').hidden = true;
+  } else {
+    cap.hidden = true;
+    $('#ndbox').hidden = false;
+    const A = state.bands[state.a], B = state.bands[state.b];
+    ['#selA', '#selB'].forEach((sel, n) => {
+      const s = $(sel);
+      Array.from(s.options).forEach((o, i) => { const b = state.bands[i]; if (b) o.textContent = b.tag + ' · ' + Math.round(b.center) + ' nm'; });
+      s.value = n === 0 ? state.a : state.b;
+    });
+    $('#formula').textContent = (A && B && A !== B) ? '(' + A.tag + ' − ' + B.tag + ') ÷ (' + A.tag + ' + ' + B.tag + ')   ' + ndName(A, B) : 'Choose two different bands.';
+  }
+}
+
+/* spectrum chart */
+const SV = { W: 720, H: 372, l: 50, r: 14, t: 20, b: 66 };
+const PW = SV.W - SV.l - SV.r, PH = SV.H - SV.t - SV.b;
+const XW = w => SV.l + PW * Math.log(w / WL_MIN) / LOGR;
+const YV = v => SV.t + PH * (1 - v / .6);
+const active = () => state.hover >= 0 ? state.hover : state.sticky;
+
+function drawScope() {
+  const act = active(), bot = SV.t + PH;
+  let s = '<svg class="scope-svg" viewBox="0 0 ' + SV.W + ' ' + SV.H + '" role="img" aria-label="Reflectance versus wavelength">';
+  s += '<defs><linearGradient id="gvis" gradientUnits="userSpaceOnUse" x1="' + XW(400) + '" x2="' + XW(700) + '" y1="0" y2="0">';
+  for (let w = 400; w <= 700; w += 20) s += '<stop offset="' + ((w - 400) / 300) + '" stop-color="' + rgbStr(wlRGB(w)) + '"/>';
+  s += '</linearGradient><linearGradient id="gir" gradientUnits="userSpaceOnUse" x1="' + XW(700) + '" x2="' + XW(2500) + '" y1="0" y2="0"><stop offset="0" stop-color="#7a1f1f"/><stop offset="1" stop-color="#76849a"/></linearGradient>';
+  s += '<pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--blocked);stroke-width:2"/></pattern></defs>';
+
+  [0, .2, .4, .6].forEach(v => {
+    s += '<line x1="' + SV.l + '" x2="' + (SV.W - SV.r) + '" y1="' + YV(v) + '" y2="' + YV(v) + '" style="stroke:var(--grid);stroke-width:1"/>';
+    s += '<text x="' + (SV.l - 8) + '" y="' + (YV(v) + 4) + '" text-anchor="end">' + v.toFixed(1) + '</text>';
+  });
+  [400, 500, 700, 1000, 1500, 2000, 2500].forEach(w => {
+    s += '<line x1="' + XW(w) + '" x2="' + XW(w) + '" y1="' + SV.t + '" y2="' + bot + '" style="stroke:var(--grid);stroke-width:1"/>';
+    s += '<text x="' + XW(w) + '" y="' + (bot + 16) + '" text-anchor="' + (w === 2500 ? 'end' : w === 400 ? 'start' : 'middle') + '">' + w + '</text>';
+  });
+  [[1340, 1460], [1790, 1960]].forEach(r => {
+    const x0 = XW(r[0]), x1 = XW(r[1]);
+    s += '<rect x="' + x0 + '" y="' + SV.t + '" width="' + (x1 - x0) + '" height="' + PH + '" fill="url(#hatch)" opacity=".55"/>';
+    s += '<text transform="rotate(-90 ' + ((x0 + x1) / 2 + 4) + ' ' + (SV.t + PH - 8) + ')" x="' + ((x0 + x1) / 2 + 4) + '" y="' + (SV.t + PH - 8) + '" style="font-size:11px">water vapor blocks</text>';
+  });
+
+  state.bands.forEach(b => {
+    const lo = Math.max(WL_MIN, b.center - b.width / 2), hi = Math.min(WL_MAX, b.center + b.width / 2);
+    const x0 = XW(lo), x1 = XW(hi), w = Math.max(3, x1 - x0), col = bandCol(b);
+    s += '<rect x="' + x0 + '" y="' + SV.t + '" width="' + w + '" height="' + PH + '" style="fill:' + col + ';fill-opacity:.2;stroke:' + col + ';stroke-width:1.2"/>';
+  });
+
+  CLASSES.forEach((c, ci) => {
+    let d = '';
+    for (let w = 400; w <= 2500; w += 10) d += (w === 400 ? 'M' : 'L') + XW(w).toFixed(1) + ' ' + YV(interp(c.pts, w)).toFixed(1);
+    const on = ci === act, dim = act >= 0 && !on;
+    s += '<path d="' + d + '" fill="none" stroke="' + c.color + '" stroke-width="' + (on ? 4 : 2) + '" stroke-linejoin="round" opacity="' + (dim ? .2 : .95) + '"/>';
+  });
+
+  if (act >= 0) {
+    state.bands.forEach(b => {
+      const v = bandMean(CLASSES[act].pts, b.center, b.width);
+      s += '<circle cx="' + XW(b.center) + '" cy="' + YV(v) + '" r="6" style="fill:' + bandCol(b) + ';stroke:var(--panel);stroke-width:2"/>';
+    });
+  }
+  state.bands.forEach((b, i) => {
+    s += '<text x="' + XW(b.center) + '" y="' + (SV.t + 13 + (i % 3) * 14) + '" text-anchor="middle" style="fill:' + bandCol(b) + ';font-weight:600;font-size:13px">' + b.tag + '</text>';
+  });
+
+  s += '<rect x="' + XW(400) + '" y="' + (bot + 24) + '" width="' + (XW(700) - XW(400)) + '" height="9" fill="url(#gvis)"/>';
+  s += '<rect x="' + XW(700) + '" y="' + (bot + 24) + '" width="' + (XW(2500) - XW(700)) + '" height="9" fill="url(#gir)"/>';
+  [[400, 700, 'VISIBLE'], [700, 1300, 'NEAR-IR'], [1300, 2500, 'SHORTWAVE-IR']].forEach(r => {
+    s += '<text x="' + ((XW(r[0]) + XW(r[1])) / 2) + '" y="' + (bot + 48) + '" text-anchor="middle" style="font-size:12px;letter-spacing:.06em">' + r[2] + '</text>';
+  });
+  [700, 1300].forEach(w => { s += '<line x1="' + XW(w) + '" x2="' + XW(w) + '" y1="' + (bot + 24) + '" y2="' + (bot + 54) + '" style="stroke:var(--muted);stroke-width:1"/>'; });
+  s += '<text x="' + (SV.l + PW / 2) + '" y="' + (SV.H - 4) + '" text-anchor="middle">Wavelength in nm (log scale)</text>';
+  s += '<text transform="rotate(-90 13 ' + (SV.t + PH / 2) + ')" x="13" y="' + (SV.t + PH / 2) + '" text-anchor="middle">Reflectance</text>';
+  s += '</svg>';
+  $('#scope').innerHTML = s;
+}
+
+function drawInspect() {
+  const box = $('#inspect'), act = active();
+  if (act < 0) { box.innerHTML = '<p class="note">Move over the image or choose a surface to read its reflectance in each band.</p>'; return; }
+  const c = CLASSES[act];
+  let h = '<div class="inspect-h"><i style="background:' + c.color + '"></i><strong>' + c.name + '</strong><span class="note">average reflectance inside each band</span></div><ul>';
+  state.bands.forEach(b => {
+    const v = bandMean(c.pts, b.center, b.width);
+    h += '<li><span style="color:' + bandCol(b) + ';font-weight:600">' + b.tag + '</span><span>' + Math.round(b.center) + ' nm</span><span class="trk"><b style="width:' + Math.min(100, v / .6 * 100).toFixed(1) + '%;background:' + c.color + '"></b></span><span class="val">' + v.toFixed(3) + '</span></li>';
+  });
+  if (!state.bands.length) h += '<li class="note" style="display:block">Add a band to see values.</li>';
+  box.innerHTML = h + '</ul>';
+}
+
+function syncLegend() {
+  const sel = active();
+  document.querySelectorAll('.lg').forEach((el, i) => el.setAttribute('aria-pressed', String(state.sticky === i)));
+}
+
+let raf = 0, raf2 = 0;
+function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+function scheduleLight() { if (!raf2) raf2 = requestAnimationFrame(() => { raf2 = 0; drawScope(); drawInspect(); syncLegend(); }); }
+function render() {
+  computeBands();
+  drawMain();
+  drawThumbs();
+  drawCaption();
+  drawScope();
+  drawInspect();
+  syncLegend();
+}
+
+/* ---- legend + pointer ---- */
+CLASSES.forEach((c, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'lg';
+  b.innerHTML = '<i style="background:' + c.color + '"></i>' + c.name;
+  b.addEventListener('pointerenter', () => { state.hover = i; scheduleLight(); });
+  b.addEventListener('pointerleave', () => { state.hover = -1; scheduleLight(); });
+  b.addEventListener('click', () => { state.sticky = state.sticky === i ? -1 : i; scheduleLight(); });
+  $('#legend').appendChild(b);
+});
+const ring = $('#ring');
+function pick(e) {
+  const r = frame.getBoundingClientRect();
+  const x = Math.min(SW - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * SW)));
+  const y = Math.min(SH - 1, Math.max(0, Math.floor((e.clientY - r.top) / r.height * SH)));
+  return { x, y, i: y * SW + x };
+}
+function place(p) { ring.style.display = 'block'; ring.style.left = ((p.x + .5) / SW * 100) + '%'; ring.style.top = ((p.y + .5) / SH * 100) + '%'; }
+frame.addEventListener('pointermove', e => { const p = pick(e); state.hover = SC.cls[p.i]; place(p); scheduleLight(); });
+frame.addEventListener('pointerdown', e => { const p = pick(e); state.hover = SC.cls[p.i]; state.sticky = SC.cls[p.i]; place(p); scheduleLight(); });
+frame.addEventListener('pointerleave', () => { state.hover = -1; ring.style.display = 'none'; scheduleLight(); });
+
+/* ---- presets and adding ---- */
+const PRESETS = [
+  { name: 'True color', note: 'What your eyes see', bands: [[660, 60, 'r'], [560, 60, 'g'], [480, 60, 'b']] },
+  { name: 'Color infrared', note: 'NIR, red, green', bands: [[850, 100, 'r'], [660, 60, 'g'], [560, 60, 'b']] },
+  { name: 'Agriculture', note: 'SWIR 1, NIR, blue', bands: [[1650, 100, 'r'], [850, 100, 'g'], [480, 60, 'b']] },
+  { name: 'Burn and geology', note: 'SWIR 2, NIR, blue', bands: [[2200, 120, 'r'], [850, 100, 'g'], [480, 60, 'b']] },
+  { name: 'NIR only', note: 'One band as gray', bands: [[850, 100, 'rgb']] },
+  { name: 'Vegetation index', note: 'NIR vs red', nd: 1, bands: [[850, 100, 'r'], [660, 60, 'g']] },
+  { name: 'Water index', note: 'Green vs NIR', nd: 1, bands: [[560, 60, 'r'], [850, 100, 'g']] },
+  { name: 'Burn index', note: 'NIR vs SWIR 2', nd: 1, bands: [[850, 100, 'r'], [2200, 120, 'g']] },
+  { name: 'Surprise me', note: 'Three random bands', random: 1 }
+];
+const QUICK = [['Blue', 482, 60], ['Green', 561, 58], ['Red', 655, 38], ['Red edge', 740, 20], ['NIR', 865, 30], ['SWIR 1', 1609, 85], ['SWIR 2', 2201, 185]];
+
+function setMode(m) {
+  state.mode = m;
+  $('#mRgb').setAttribute('aria-pressed', String(m === 'rgb'));
+  $('#mNd').setAttribute('aria-pressed', String(m === 'nd'));
+}
+function applyPreset(p) {
+  state.bands = [];
+  if (p.random) {
+    const cs = [0, 1, 2].map(() => Math.round(420 * Math.pow(2400 / 420, Math.random()))).sort((a, b) => a - b);
+    ['b', 'g', 'r'].forEach((ch, i) => state.bands.push(makeBand(cs[i], 40 + Math.round(Math.random() * 32) * 5, ch)));
+  } else {
+    p.bands.forEach(x => state.bands.push(makeBand(x[0], x[1], x[2])));
+  }
+  if (p.nd) { state.a = 0; state.b = 1; }
+  setMode(p.nd ? 'nd' : 'rgb');
+  structure();
+  schedule();
+}
+function addBand(c, w) {
+  if (state.bands.length >= MAXB) return;
+  state.bands.push(makeBand(c, w, freeCh()));
+  structure();
+  schedule();
+}
+PRESETS.forEach(p => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'preset';
+  b.innerHTML = p.name + '<small>' + p.note + '</small>';
+  b.addEventListener('click', () => applyPreset(p));
+  $('#presets').appendChild(b);
+});
+QUICK.forEach(q => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'quick';
+  b.textContent = q[0] + ' ' + q[1];
+  b.addEventListener('click', () => addBand(q[1], q[2]));
+  $('#quick').appendChild(b);
+});
+$('#addCustom').addEventListener('click', () => addBand(1000, 100));
+$('#clearAll').addEventListener('click', () => { state.bands = []; structure(); schedule(); });
+$('#mRgb').addEventListener('click', () => { setMode('rgb'); schedule(); });
+$('#mNd').addEventListener('click', () => { setMode('nd'); schedule(); });
+$('#selA').addEventListener('change', e => { state.a = +e.target.value; if (state.b === state.a) state.b = (state.a + 1) % Math.max(1, state.bands.length); schedule(); });
+$('#selB').addEventListener('change', e => { state.b = +e.target.value; if (state.a === state.b) state.a = (state.b + 1) % Math.max(1, state.bands.length); schedule(); });
+$('#haze').addEventListener('input', e => { state.haze = +e.target.value / 100; $('#hazeOut').textContent = e.target.value + '%'; schedule(); });
+$('#noise').addEventListener('input', e => { state.noise = +e.target.value / 100; $('#noiseOut').textContent = e.target.value + '%'; schedule(); });
+$('#stretch').addEventListener('change', e => { state.stretch = e.target.checked; schedule(); });
+$('#hazeOut').textContent = '15%';
+$('#noiseOut').textContent = '30%';
+
+applyPreset(PRESETS[0]);
+</script>
+
+</body></html>
